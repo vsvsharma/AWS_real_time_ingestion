@@ -36,7 +36,7 @@ The project involves the following stages:
 - **Infrastructure as Code (IaC):** Entire solution automated using Terraform for quick deployment and management.
 
 ## Data Flow
-<img width="1000px" src="./real_time_ingestion_pipeline_simple.png" alt="data-flow" />
+<img width="300px" src="./real_time_ingestion_pipeline_simple.png" alt="data-flow" />
 
 ## Prerequisites
 - AWS CLI installed and configured.
