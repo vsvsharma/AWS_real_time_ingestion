@@ -4,7 +4,9 @@ resource "aws_glue_catalog_database" "databases" {
   for_each = var.databases
   name = each.key
 }
-
+/*
+creating different glue tables for the raw-layer and transform-layer
+*/
 resource "aws_glue_catalog_table" "glue_tables" {
   for_each = { for table in var.tables : table.name => table }
 
@@ -42,7 +44,9 @@ resource "aws_glue_catalog_table" "glue_tables" {
   }
 }
 
-
+/*
+creating raw-layer crawler to update the table and partitons accordingly
+*/
 resource "aws_glue_crawler" "raw_data_layer_crawler" {
   for_each = var.crawlers
   name=each.value.name
@@ -54,7 +58,9 @@ resource "aws_glue_crawler" "raw_data_layer_crawler" {
   schedule = each.value.schedule
 }
 
-
+/*
+taking the transformation script stored in s3 bucket and deploying it in the glue script
+*/
 resource "aws_glue_job" "transformation_script" {
   name = "transformation_glue_job.py"
   role_arn = var.glue_job_role_arn
@@ -73,23 +79,9 @@ resource "aws_glue_job" "transformation_script" {
   worker_type = "G.1X"
 }
 
-# resource "aws_glue_trigger" "glue_job_trigger" {
-#   name = "glue_job_trigger"
-#   type = "CONDITIONAL"
-
-#   actions {
-#     job_name = aws_glue_job.transformation_script.name
-#   }
-
-#   predicate {
-#     conditions {
-#       logical_operator = "EQUALS"
-#       crawler_name = aws_glue_crawler.raw_data_layer_crawler["raw_layer_crawler"].name
-#       crawl_state  = "SUCCEEDED"
-#     }
-#   }
-# }
-
+/*
+setting the trigger for the glue job to execute daily at 1:30 AM
+*/
 resource "aws_glue_trigger" "glue_job_trigger" {
   name = "glue_job_daily_trigger"
   type = "SCHEDULED"

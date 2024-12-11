@@ -1,3 +1,7 @@
+/*
+setting the required parameters for the resource creation 
+*/
+
 variable "function_name" {
   description = "my-docker-lambda"
   type        = string

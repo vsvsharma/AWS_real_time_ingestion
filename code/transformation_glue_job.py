@@ -6,6 +6,13 @@ from pyspark.sql.functions import col, input_file_name, regexp_extract
 from awsglue.dynamicframe import DynamicFrame
 
 class DataIngestion:
+
+    """
+    1. Initiating the glue context. 
+    2. Declaring the database, table name from which data will be fetched
+    3. Mentioning to predicate so that it don't fetch the whole data till date,
+    intead of that it will just fetch the previous day partition.
+    """
     def __init__(self,glue_context,db_name, tbl_name, previous_day_partition, predicate):
         self.glue_context=glue_context
         self.db_name=db_name
@@ -13,6 +20,11 @@ class DataIngestion:
         self.previous_day_partition=previous_day_partition
         self.predicate=predicate
 
+    """
+    1. creating the dynamic frame of the data fetched from the Database.
+    2. converting the dynamic frames to the dataframes so that the pyspark transformation can be
+    implemented on that data.
+    """
     def fetch_raw_data(self):
         
         dynamic_frame=self.glue_context.create_dynamic_frame.from_catalog(database=self.db_name, table_name=self.tbl_name, push_down_predicate=self.predicate)
@@ -20,8 +32,17 @@ class DataIngestion:
         return dynamic_frame.toDF()
     
 class DataTransformation:
+    """
+    initiating the raw df converted from dynamic frame
+    """
+
     def __init__(self,raw_df):
         self.raw_df=raw_df
+
+    """
+    1. tranformation is being done for the different tables based upon on the data modelling.
+    2. transformed dataframes are returned in every function.
+    """
 
     def personal_details(self):
 
@@ -46,9 +67,19 @@ class DataTransformation:
         return self.raw_df.select(col("results.login.uuid").alias("uuid"), col("results.login.salt").alias("salt"), col("results.login.md5").alias("md5"), col("results.login.sha1").alias("sha1"), col("results.login.sha256").alias("sha256"), col("partition_0").alias("p_date"))
     
 class Datawriter:
+
+    """
+    initiating the glue context and declaring the s3 path into which data is going to be written
+    """
     def __init__(self,glue_context, s3_target_path):
         self.glue_context=glue_context
         self.s3_target_path=s3_target_path
+
+    """
+    1. converting the dataframes into the dynamic frames and writing it to the transform layer
+    2. doing partition in the s3 based upon the p_date present in the data for doing efficient partition
+    based upon the date. 
+    """
 
     def write_to_s3(self,transformed_df):
         dynamic_frame = DynamicFrame.fromDF(transformed_df, self.glue_context, "dynamic_frame")

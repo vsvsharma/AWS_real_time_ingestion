@@ -1,3 +1,6 @@
+/*
+declaring the required variable namaes for the resources created
+*/
 variable "s3_bucket_name" {
   description = "user-data-raw-layer"
   type = string

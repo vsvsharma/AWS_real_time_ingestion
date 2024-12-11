@@ -1,3 +1,7 @@
+/*
+creating firehose stream for the ingestion of data coming from the user-data-api
+*/
+
 resource "aws_kinesis_firehose_delivery_stream" "extraction_firehose_stream" {
   name        = var.firehose_name
   destination = "extended_s3"

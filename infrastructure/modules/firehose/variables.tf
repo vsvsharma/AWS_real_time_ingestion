@@ -1,3 +1,7 @@
+/*
+declaring the names for parameters required in the resource creation
+*/
+
 variable "firehose_name" {
   description = "The name of the Kinesis Firehose delivery stream"
   type        = string

@@ -1,3 +1,7 @@
+/*
+creating ecr repo to store the docker image of the extraction code file
+*/
+
 
 resource "aws_ecr_repository" "extraction_ecr_repo" {
   name                 = var.repo_name

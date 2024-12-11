@@ -234,6 +234,7 @@ resource "aws_iam_role" "glue_job_role" {
   })
 }
 
+#Policy for the glue job to execute smoothly without any restriction 
 resource "aws_iam_policy" "glue_job_policy" {
   name        = "glue-job-policy"
   description = "Policy for Glue Job Role with S3, Glue Catalog, CloudWatch and Athena access"
@@ -321,6 +322,7 @@ resource "aws_iam_policy" "glue_job_policy" {
 })
 }
 
+# Attaching the glue job policy to the glue job role
 resource "aws_iam_role_policy_attachment" "glue_job_policy_attachment" {
   role       = aws_iam_role.glue_job_role.name
   policy_arn = aws_iam_policy.glue_job_policy.arn

@@ -1,3 +1,8 @@
+/*
+defining the schema for the raw-layer table and 
+for the transform-layer-tables according to the data model
+*/
+
 variable "tables" {
   type = list(object({
     name          = string
@@ -144,12 +149,14 @@ variable "tables" {
   ]
 }
 
+#defining the schedule for the raw-layer crawler to schedule daily at 1:00 AM(UTC)
 variable "raw_layer_crawler_schedule" {
   description = "Schedule for the raw layer"
   type = string
   default = "cron(0 1 * * ? *)" #everyday at 1AM
 }
 
+#defining the schedule for the transform-layer crawler to schedule daily at 2:00 AM(UTC)
 variable "transform_layer_crawler_schedule" {
   description = "Schedule for the transform layer"
   type = string

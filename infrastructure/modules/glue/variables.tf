@@ -1,3 +1,7 @@
+/*
+setting the required datatype parameters for the resource creation like glue database and tables 
+*/
+
 variable "databases" {
   type = set(string)
 }

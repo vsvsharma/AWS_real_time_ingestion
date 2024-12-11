@@ -8,6 +8,7 @@ resource "aws_lambda_function" "docker_lambda" {
   timeout      = var.timeout
 }
 
+#Allowing lambda to invoke from a event bridge without any restriction
 resource "aws_lambda_permission" "allow_invocation" {
   statement_id  = "AllowExecutionFromAPI"
   action        = "lambda:InvokeFunction"
