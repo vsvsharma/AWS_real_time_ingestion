@@ -1,6 +1,4 @@
-provider "aws" {
 
-}
 # #calling ecr module
 module "ecr" {
   source    = "./modules/ecr"

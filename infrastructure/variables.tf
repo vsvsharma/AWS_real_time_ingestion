@@ -87,7 +87,7 @@ variable "tables" {
       location      = "s3://user-data-transform-layer/login/"
       columns       = [
         {name="uuid", type="array<string>"},
-        {name="login", type="array<string>"},
+        {name="username", type="array<string>"},
         {name="password", type="array<string>"}
       ]
       comment       = "This is login table"
