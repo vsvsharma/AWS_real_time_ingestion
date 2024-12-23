@@ -7,6 +7,9 @@ This repository contains the implementation of a real-time data ingestion and tr
 
 <img width="1000px" src="./animated-real-time-arch2.webp" alt="anime-arch" />
 
+## Architecture Diagram
+<img width="1000px" src="./aws_real_time_ingestion_arch.jpg" alt="anime-arch" />
+
 ## Overview
 The project involves the following stages:
 
