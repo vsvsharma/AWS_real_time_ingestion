@@ -1,0 +1,247 @@
+name: CI/CD Pipeline — Infrastructure Deploy
+
+# ──────────────────────────────────────────────
+# TRIGGER: fires when a PR is merged into main
+# (push to main = merged PR in GitHub flow)
+# ──────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infrastructure/**"   # only run when infra files change
+      - ".github/workflows/cicd_pipeline.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "infrastructure/**"   # plan-only on open PRs (no apply)
+
+# Cancel any in-progress run for the same branch
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+# ──────────────────────────────────────────────
+# PERMISSIONS  (needed for OIDC auth with AWS)
+# ──────────────────────────────────────────────
+permissions:
+  id-token: write   # OIDC token for AWS assume-role
+  contents: read
+  pull-requests: write  # post plan output as PR comment
+
+# ──────────────────────────────────────────────
+# ENVIRONMENT VARIABLES
+# ──────────────────────────────────────────────
+env:
+  TF_VERSION: "1.7.5"
+  AWS_REGION: "ap-south-1"                          
+  TF_WORKING_DIR: "./infrastructure"               # directory fetched from repo
+  # S3 backend (Terraform.tfstate)
+  TF_BACKEND_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+  TF_BACKEND_KEY: "terraform/state/terraform.tfstate"
+  # DynamoDB state-lock table
+  TF_BACKEND_DYNAMODB: ${{ secrets.TF_LOCK_TABLE }}
+
+# ──────────────────────────────────────────────
+# JOBS
+# ──────────────────────────────────────────────
+jobs:
+
+  # ════════════════════════════════════════════
+  # JOB 1 — VALIDATE  (runs on every PR + push)
+  # ════════════════════════════════════════════
+  validate:
+    name: "Terraform Validate & Lint"
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the MAIN branch (or PR head)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}   # pulls from MAIN branch on merge
+
+      # 2. Authenticate to AWS via OIDC (no long-lived keys)
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}   # IAM Role 
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. Install Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # 4. Terraform Init (connects to S3 backend + DynamoDB lock)
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TF_BACKEND_BUCKET }}" \
+            -backend-config="key=${{ env.TF_BACKEND_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ env.TF_BACKEND_DYNAMODB }}" \
+            -backend-config="encrypt=true" \
+            -reconfigure
+
+      # 5. Format check
+      - name: Terraform Format Check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check -recursive
+
+      # 6. Validate HCL syntax
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+  # ════════════════════════════════════════════
+  # JOB 2 — PLAN  (runs on every PR + push)
+  # ════════════════════════════════════════════
+  plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    needs: validate   # only plan if validate passed
+    outputs:
+      plan_exit_code: ${{ steps.plan.outputs.exitcode }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: true   # needed to capture exit code
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TF_BACKEND_BUCKET }}" \
+            -backend-config="key=${{ env.TF_BACKEND_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ env.TF_BACKEND_DYNAMODB }}" \
+            -backend-config="encrypt=true"
+
+      # 2. Terraform Plan — saves plan file
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform plan \
+            -out=tfplan \
+            -detailed-exitcode \
+            -input=false \
+            -var-file="environments/prod.tfvars" 2>&1 | tee plan_output.txt
+        continue-on-error: true   # capture exit code even on changes detected
+
+      # 3. Post plan summary as PR comment
+      - name: Post Plan to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan_output.txt', 'utf8');
+            const maxLen = 65000;
+            const truncated = plan.length > maxLen ? plan.slice(0, maxLen) + '\n... (truncated)' : plan;
+            const body = `## Terraform Plan Output\n\`\`\`hcl\n${truncated}\n\`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      # 4. Fail the job if plan itself errored (exit 1); exit 2 = changes present = OK
+      - name: Evaluate Plan Exit Code
+        if: steps.plan.outputs.exitcode == '1'
+        run: exit 1
+
+      # 5. Upload plan artifact so apply job can use it
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 1
+
+  # ════════════════════════════════════════════
+  # JOB 3 — APPLY  (only on push to main)
+  # ════════════════════════════════════════════
+  apply:
+    name: "Terraform Apply (auto-approve)"
+    runs-on: ubuntu-latest
+    needs: plan
+    # Only deploy when code is merged into main — not on open PRs
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.plan.outputs.plan_exit_code != '1'
+    environment:
+      name: production   # requires manual approval gate in GitHub Environments
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main   # deploy from MAIN
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TF_BACKEND_BUCKET }}" \
+            -backend-config="key=${{ env.TF_BACKEND_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ env.TF_BACKEND_DYNAMODB }}" \
+            -backend-config="encrypt=true"
+
+      # Download the exact plan produced in the plan job
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKING_DIR }}
+
+      # Terraform Apply — auto-approve
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve -input=false tfplan
+
+      # ── Post-apply: notify on success ──────
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "✅ Infrastructure deployed successfully from commit ${{ github.sha }}"
+          
+
+      # ── Post-apply: notify on failure ──────
+      - name: Notify Failure
+        if: failure()
+        run: |
+          echo "❌ Infrastructure deploy FAILED for commit ${{ github.sha }}"
