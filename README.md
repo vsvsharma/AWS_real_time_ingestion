@@ -1,9 +1,9 @@
-# AWS Real-Time Data And Transformation Pipeline
+# AWS Real-Time Data, Transformation And CI/CD Pipeline
 
 ```sh
 By: Varun Sharma
 ```
-This repository contains the implementation of a real-time data ingestion and transformation pipeline, designed to handle and process user data from an external API. The pipeline leverages **AWS Services** and **Terraform** for infrastructure automation, enabling scalability, maintainability, and efficiency.
+This project implements a fully automated **AWS** based real-time data ingestion and transformation pipeline. It ingests user data from an external API, stores it in a scalable **data lake architecture**, performs scheduled transformations using **AWS Glue and PySpark**, and automates infrastructure deployment using **Terraform and GitHub Actions CI/CD.**
 
 <img width="1000px" src="./animated-real-time-arch2.webp" alt="anime-arch" />
 
@@ -27,8 +27,8 @@ The project involves the following stages:
 <u>**4. Access and Security**</u>
 - IAM Roles: Precise IAM roles are configured for all AWS resources to ensure seamless and secure inter-service communication.
 
-<u>**5. Infrastructure Automation**</u>
-- The entire infrastructure is provisioned and managed using **Terraform**, ensuring consistency, repeatability, and ease of deployment.
+<u>**5. Infrastructure Automation(CI/CD Pipeline)**</u>
+- The entire infrastructure is provisioned and managed using **Terraform** through GitHub Actions. ensuring consistency, repeatability, and ease of deployment.
 
 ## Features
 - **Real-Time Data Processing:** Enables real-time data ingestion from an external API to an AWS-based data lake.
